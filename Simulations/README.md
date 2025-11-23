@@ -31,5 +31,5 @@ Run `uv sync`.
 Prefix commands with `uv run`, like:
 
 ```
-uv run simulation.py --mode sweep --n-orgs 100 --repeats 10 --steps 100
+uv run main.py --mode sweep --n-orgs 100 --repeats 10 --steps 100
 ```

@@ -1184,10 +1184,10 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     Examples:
       - Single-org master run with visualization:
-          python simulation.py --mode single --data-source master --steps 100 --max-nodes 50
+          python main.py --mode single --data-source master --steps 100 --max-nodes 50
 
       - Batch experiment over many master firm-years:
-          python simulation.py --mode batch --steps 100 --n-orgs 100 --repeats 100 --max-nodes 50
+          python main.py --mode batch --steps 100 --n-orgs 100 --repeats 100 --max-nodes 50
     """
     parser = argparse.ArgumentParser(description="Org threat-surface toy model simulation")
     parser.add_argument(
