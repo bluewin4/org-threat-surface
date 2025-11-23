@@ -1,4 +1,4 @@
-git push# Org Threat Surface Toy Model
+# Org Threat Surface Toy Model
 
 Toy simulation of an organizational social graph to explore misaligned AI behavior via token-vs-topology trade-offs.
 
@@ -8,7 +8,7 @@ In order of basedness:
 
 ### Use direnv
 
-Install direnv.
+Install direnv and nix.
 
 Run `direnv allow`.
 
