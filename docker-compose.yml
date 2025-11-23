@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  simulator:
+    build: .
+    container_name: org-threat-surface-simulator
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./Simulations/results:/app/results
+      - ./Simulations/master_SP500_TMT.csv:/app/master_SP500_TMT.csv:ro
+      - ./Simulations/snapshot.csv:/app/snapshot.csv:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
