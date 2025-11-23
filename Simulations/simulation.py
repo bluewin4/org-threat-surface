@@ -1338,6 +1338,7 @@ def main(argv: Optional[List[str]] = None) -> None:
                 mean_personal_weight=w,
                 return_individual_runs=True,
             )
+            
             # Take the mean of the last 10 steps to represent "final" stable state
             final_org = np.nanmean(org_avg[-10:]) if len(org_avg) >= 10 else np.nanmean(org_avg)
             final_pers = np.nanmean(pers_avg[-10:]) if len(pers_avg) >= 10 else np.nanmean(pers_avg)
@@ -1445,6 +1446,31 @@ def main(argv: Optional[List[str]] = None) -> None:
         plt.savefig("sweep_results.png", dpi=150)
         print("Saved sweep results to sweep_results.png")
         plt.show()
+        
+        # Export sweep summary data for interactive dashboards
+        total_runs = args.n_orgs * args.repeats
+        sweep_summary_data = []
+        for i, w in enumerate(weights):
+            sweep_summary_data.append({
+                "Mean_Personal_Weight": w,
+                "Org_Reward_Mean": results_org_mean[i],
+                "Org_Reward_CI_Low": results_org_ci_low[i],
+                "Org_Reward_CI_High": results_org_ci_high[i],
+                "Personal_Reward_Mean": results_pers_mean[i],
+                "Personal_Reward_CI_Low": results_pers_ci_low[i],
+                "Personal_Reward_CI_High": results_pers_ci_high[i],
+                "Shadow_Links_Mean": results_shadow_mean[i],
+                "Shadow_Links_CI_Low": results_shadow_ci_low[i],
+                "Shadow_Links_CI_High": results_shadow_ci_high[i],
+                "Shadow_Links_Total_Mean": results_shadow_mean[i] * total_runs,
+                "Shadow_Links_Total_CI_Low": results_shadow_ci_low[i] * total_runs,
+                "Shadow_Links_Total_CI_High": results_shadow_ci_high[i] * total_runs,
+            })
+        
+        df_sweep_summary = pd.DataFrame(sweep_summary_data)
+        sweep_summary_path = "sweep_summary.csv"
+        df_sweep_summary.to_csv(sweep_summary_path, index=False)
+        print(f"Saved sweep summary data to {sweep_summary_path}")
         
         # Plot misalignment potential by org structure
         if org_misalignment_potential:
