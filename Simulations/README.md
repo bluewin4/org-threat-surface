@@ -8,7 +8,7 @@ In order of basedness:
 
 ### Use direnv
 
-Install direnv.
+Install direnv and nix.
 
 Run `direnv allow`.
 
