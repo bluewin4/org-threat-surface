@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agent Coordination Simulator</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 Agent Coordination Simulator</h1>
+            <p>Select an organization to watch AI agents collaborate and communicate</p>
+        </header>
+
+        <div class="organizations">
+            {% for org_id, org in scenarios.items() %}
+            <div class="org-card" onclick="selectOrg('{{ org_id }}')">
+                <div class="org-header">
+                    <h2>{{ org.name }}</h2>
+                </div>
+                <div class="org-description">
+                    <p>{{ org.description }}</p>
+                </div>
+                <div class="org-stats">
+                    <div class="stat">
+                        <span class="stat-number">{{ org.employees|length }}</span>
+                        <span class="stat-label">Employees</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number">{{ org.tasks|length }}</span>
+                        <span class="stat-label">Sample Tasks</span>
+                    </div>
+                </div>
+                <div class="org-employees">
+                    <h3>Team Members:</h3>
+                    <div class="employee-list">
+                        {% for emp_id, emp in org.employees.items() %}
+                        <div class="employee">
+                            <span class="employee-name">{{ emp.name }}</span>
+                            <span class="employee-role">{{ emp.role.replace('_', ' ').title() }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                <button class="start-btn">Start Simulation →</button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <script>
+        function selectOrg(orgId) {
+            window.location.href = `/organization/${orgId}`;
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ organization.name }} - Agent Simulation</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="nav">
+                <a href="/" class="back-btn">← Back to Organizations</a>
+                <h1>{{ organization.name }}</h1>
+            </div>
+            <p>{{ organization.description }}</p>
+        </header>
+
+        <div class="simulation-controls">
+            <div class="control-panel">
+                <h2>Simulation Controls</h2>
+                
+                <div class="input-group">
+                    <label for="task-select">Choose a task:</label>
+                    <select id="task-select">
+                        {% for task in organization.tasks %}
+                        <option value="{{ task }}">{{ task }}</option>
+                        {% endfor %}
+                        <option value="custom">Custom task...</option>
+                    </select>
+                    <input type="text" id="custom-task" placeholder="Enter custom task..." style="display: none;">
+                </div>
+
+                <div class="input-group">
+                    <label for="initiator-select">Starting agent:</label>
+                    <select id="initiator-select">
+                        {% for emp_id, emp in organization.employees.items() %}
+                        <option value="{{ emp_id }}">{{ emp.name }} ({{ emp.role.replace('_', ' ').title() }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="button-group">
+                    <button id="start-simulation" class="primary-btn">🚀 Start Simulation</button>
+                    <button id="stop-simulation" class="secondary-btn" disabled>⏹️ Stop</button>
+                </div>
+            </div>
+
+            <div class="org-overview">
+                <h3>Team Overview</h3>
+                <div class="team-grid">
+                    {% for emp_id, emp in organization.employees.items() %}
+                    <div class="team-member" id="member-{{ emp_id }}">
+                        <div class="member-avatar">{{ emp.name[0] }}</div>
+                        <div class="member-info">
+                            <div class="member-name">{{ emp.name }}</div>
+                            <div class="member-role">{{ emp.role.replace('_', ' ').title() }}</div>
+                            <div class="member-team">{{ emp.team }}</div>
+                        </div>
+                        <div class="member-status">
+                            <span class="social-capital">1000</span>
+                            <span class="status-label">Social Capital</span>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <div class="simulation-display">
+            <div class="chat-container">
+                <div class="chat-header">
+                    <h3>🗨️ Agent Conversations</h3>
+                    <div class="status-indicator" id="sim-status">Ready</div>
+                </div>
+                <div class="chat-messages" id="chat-messages">
+                    <div class="welcome-message">
+                        <p>Select a task and click "Start Simulation" to watch agents collaborate!</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="activity-feed">
+                <div class="feed-header">
+                    <h3>📊 Activity Feed</h3>
+                </div>
+                <div class="feed-messages" id="activity-feed">
+                    <div class="feed-item">
+                        <span class="timestamp">Ready</span>
+                        <span class="activity">Simulation ready to start</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const orgId = '{{ org_id }}';
+        let eventSource = null;
+        let simulationRunning = false;
+
+        // DOM elements
+        const startBtn = document.getElementById('start-simulation');
+        const stopBtn = document.getElementById('stop-simulation');
+        const taskSelect = document.getElementById('task-select');
+        const customTaskInput = document.getElementById('custom-task');
+        const initiatorSelect = document.getElementById('initiator-select');
+        const chatMessages = document.getElementById('chat-messages');
+        const activityFeed = document.getElementById('activity-feed');
+        const simStatus = document.getElementById('sim-status');
+
+        // Event listeners
+        startBtn.addEventListener('click', startSimulation);
+        stopBtn.addEventListener('click', stopSimulation);
+        
+        taskSelect.addEventListener('change', function() {
+            if (this.value === 'custom') {
+                customTaskInput.style.display = 'block';
+                customTaskInput.focus();
+            } else {
+                customTaskInput.style.display = 'none';
+            }
+        });
+
+        function startSimulation() {
+            const task = taskSelect.value === 'custom' ? customTaskInput.value : taskSelect.value;
+            const initiator = initiatorSelect.value;
+
+            if (!task.trim()) {
+                alert('Please enter a task');
+                return;
+            }
+
+            // Clear previous messages
+            chatMessages.innerHTML = '';
+            activityFeed.innerHTML = '';
+
+            // Start simulation
+            fetch('/api/start_simulation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    org_id: orgId,
+                    task: task,
+                    initiator: initiator
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    addActivityMessage('Error: ' + data.error, 'error');
+                } else {
+                    simulationRunning = true;
+                    startBtn.disabled = true;
+                    stopBtn.disabled = false;
+                    simStatus.textContent = 'Running';
+                    simStatus.className = 'status-indicator running';
+                    
+                    // Start listening for events
+                    startEventStream();
+                }
+            })
+            .catch(error => {
+                addActivityMessage('Error: ' + error.message, 'error');
+            });
+        }
+
+        function stopSimulation() {
+            fetch('/api/stop_simulation', {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                simulationRunning = false;
+                startBtn.disabled = false;
+                stopBtn.disabled = true;
+                simStatus.textContent = 'Stopped';
+                simStatus.className = 'status-indicator stopped';
+                
+                if (eventSource) {
+                    eventSource.close();
+                }
+            });
+        }
+
+        function startEventStream() {
+            eventSource = new EventSource('/api/simulation_events');
+            
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                handleSimulationEvent(data);
+            };
+
+            eventSource.onerror = function(event) {
+                console.error('EventSource error:', event);
+                if (simulationRunning) {
+                    addActivityMessage('Connection lost. Simulation may still be running.', 'warning');
+                }
+            };
+        }
+
+        function handleSimulationEvent(event) {
+            switch (event.type) {
+                case 'simulation_started':
+                    addActivityMessage(`🚀 Simulation started: ${event.task}`, 'info');
+                    break;
+                
+                case 'agent_created':
+                    addActivityMessage(`👤 Created agent: ${event.name} (${event.role})`, 'info');
+                    updateAgentStatus(event.agent_id, { social_capital: event.social_capital });
+                    break;
+                
+                case 'task_assigned':
+                    addChatMessage('system', `📝 Task assigned to ${event.agent_name}: ${event.task}`);
+                    addActivityMessage(`📝 ${event.agent_name} received task`, 'info');
+                    break;
+                
+                case 'round_started':
+                    addActivityMessage(`🔄 Round ${event.round} - ${event.agent_name}'s turn`, 'info');
+                    break;
+                
+                case 'contact_chosen':
+                    addActivityMessage(`🎯 ${event.from_name} chose to contact ${event.to_name}`, 'info');
+                    break;
+                
+                case 'message_sent':
+                    addChatMessage(event.from_agent, `${event.from_name} → ${event.to_name}: ${event.content}`, {
+                        cost: event.cost,
+                        distance: event.distance
+                    });
+                    addActivityMessage(`💬 Message sent (Cost: ${event.cost} tokens)`, 'success');
+                    updateAgentStatus(event.from_agent, { social_capital: event.remaining_capital });
+                    break;
+                
+                case 'response_received':
+                    addChatMessage(event.from_agent, `${event.from_name} → ${event.to_name}: ${event.content}`);
+                    addActivityMessage(`✅ Response received`, 'success');
+                    break;
+                
+                case 'simulation_completed':
+                    addActivityMessage(`🏁 Simulation completed after ${event.total_rounds} rounds`, 'success');
+                    simulationRunning = false;
+                    startBtn.disabled = false;
+                    stopBtn.disabled = true;
+                    simStatus.textContent = 'Completed';
+                    simStatus.className = 'status-indicator completed';
+                    break;
+                
+                case 'error':
+                    addActivityMessage(`❌ Error: ${event.message}`, 'error');
+                    break;
+            }
+        }
+
+        function addChatMessage(agentId, content, metadata = {}) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `chat-message ${agentId === 'system' ? 'system-message' : 'agent-message'}`;
+            
+            let metadataStr = '';
+            if (metadata.cost) {
+                metadataStr = `<span class="message-metadata">Cost: ${metadata.cost} tokens, Distance: ${metadata.distance}</span>`;
+            }
+            
+            messageDiv.innerHTML = `
+                <div class="message-content">${content}</div>
+                ${metadataStr}
+                <div class="message-time">${new Date().toLocaleTimeString()}</div>
+            `;
+            
+            chatMessages.appendChild(messageDiv);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function addActivityMessage(content, type = 'info') {
+            const feedItem = document.createElement('div');
+            feedItem.className = `feed-item ${type}`;
+            feedItem.innerHTML = `
+                <span class="timestamp">${new Date().toLocaleTimeString()}</span>
+                <span class="activity">${content}</span>
+            `;
+            
+            activityFeed.appendChild(feedItem);
+            activityFeed.scrollTop = activityFeed.scrollHeight;
+        }
+
+        function updateAgentStatus(agentId, status) {
+            const memberElement = document.getElementById(`member-${agentId}`);
+            if (memberElement && status.social_capital !== undefined) {
+                const capitalElement = memberElement.querySelector('.social-capital');
+                if (capitalElement) {
+                    capitalElement.textContent = status.social_capital;
+                }
+            }
+        }
+    </script>
+</body>
+</html>
