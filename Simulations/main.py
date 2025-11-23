@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from typing import Dict, List, Optional, Tuple
+from pathlib import Path
 
 import argparse
 import math
@@ -17,6 +18,7 @@ from pydantic import BaseModel, Field
 
 VECTOR_DIM = 10
 RNG = np.random.default_rng(seed=42)
+BASE_DIR = Path("results")
 
 
 class EdgeType(str, Enum):
@@ -1443,8 +1445,9 @@ def main(argv: Optional[List[str]] = None) -> None:
         ax2.set_ylim(bottom=0)
 
         plt.tight_layout()
-        plt.savefig("sweep_results.png", dpi=150)
-        print("Saved sweep results to sweep_results.png")
+        png_path = BASE_DIR / "sweep_results.png"
+        plt.savefig(png_path, dpi=150)
+        print(f"Saved sweep results to {png_path}")
         plt.show()
         
         # Export sweep summary data for interactive dashboards
@@ -1468,7 +1471,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             })
         
         df_sweep_summary = pd.DataFrame(sweep_summary_data)
-        sweep_summary_path = "sweep_summary.csv"
+        sweep_summary_path = BASE_DIR / "sweep_summary.csv"
         df_sweep_summary.to_csv(sweep_summary_path, index=False)
         print(f"Saved sweep summary data to {sweep_summary_path}")
         
@@ -1496,7 +1499,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             
             df_misalignment = pd.DataFrame(csv_data)
             df_misalignment = df_misalignment.sort_values("Avg_Shadow_Links", ascending=False)
-            csv_path = "misalignment_potential.csv"
+            csv_path = BASE_DIR / "misalignment_potential.csv"
             df_misalignment.to_csv(csv_path, index=False)
             print(f"Saved misalignment potential data to {csv_path}")
             
@@ -1518,8 +1521,9 @@ def main(argv: Optional[List[str]] = None) -> None:
             ax.grid(True, alpha=0.3, axis="y")
             
             plt.tight_layout()
-            plt.savefig("misalignment_potential.png", dpi=150)
-            print("Saved misalignment potential plot to misalignment_potential.png")
+            png_path = BASE_DIR / "misalignment_potential.png"
+            plt.savefig(png_path, dpi=150)
+            print(f"Saved misalignment potential plot to {png_path}")
             plt.show()
 
 
