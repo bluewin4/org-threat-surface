@@ -1,0 +1,717 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organizational Threat Surface Dashboard</title>
+    
+    <!-- Plotly.js for charts -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    
+    <!-- D3.js for network visualization -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 15px;
+            margin-bottom: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.1em;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .panel {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .panel h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+        }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .filters {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+        
+        .filter-group label {
+            font-size: 0.9em;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .filter-group select,
+        .filter-group input {
+            padding: 10px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 1em;
+            transition: all 0.3s;
+            background: white;
+        }
+        
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .org-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .org-table th {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+        }
+        
+        .org-table th:hover {
+            background: linear-gradient(135deg, #5568d3 0%, #653a91 100%);
+        }
+        
+        .org-table td {
+            padding: 12px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+        
+        .org-table tr {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .org-table tr:hover {
+            background: #f5f5f5;
+            transform: translateX(5px);
+        }
+        
+        .org-table tr.selected {
+            background: #e8eaf6;
+            border-left: 4px solid #667eea;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .badge-high {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .badge-medium {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        
+        .badge-low {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
+        .network-container {
+            width: 100%;
+            height: 600px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            background: white;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .network-container svg {
+            width: 100%;
+            height: 100%;
+        }
+        
+        .node {
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .node:hover {
+            stroke-width: 3px;
+        }
+        
+        .link {
+            stroke: #999;
+            stroke-opacity: 0.6;
+            stroke-width: 2px;
+        }
+        
+        .link.edict {
+            stroke: #e53935;
+            stroke-width: 3px;
+            stroke-dasharray: 5,5;
+        }
+        
+        .link.shadow {
+            stroke: #ff9800;
+            stroke-width: 2px;
+            stroke-dasharray: 3,3;
+        }
+        
+        .node-label {
+            font-size: 10px;
+            pointer-events: none;
+            fill: #333;
+            font-weight: 500;
+        }
+        
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 200px;
+            color: #666;
+            font-size: 1.2em;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin-right: 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .chart-container {
+            height: 400px;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        
+        .stat-card h3 {
+            font-size: 2em;
+            margin-bottom: 5px;
+        }
+        
+        .stat-card p {
+            opacity: 0.9;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Organizational Threat Surface Dashboard</h1>
+            <p class="subtitle">Interactive analysis of misalignment potential and organizational dynamics</p>
+        </header>
+        
+        <div class="dashboard-grid">
+            <!-- Sweep Summary Chart -->
+            <div class="panel full-width">
+                <h2>Sweep Results: Reward Dynamics</h2>
+                <div class="chart-container" id="sweepChart"></div>
+            </div>
+            
+            <!-- Misalignment Table -->
+            <div class="panel full-width">
+                <h2>Organization Misalignment Potential</h2>
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>Filter by Year</label>
+                        <select id="yearFilter">
+                            <option value="">All Years</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Sort by</label>
+                        <select id="sortFilter">
+                            <option value="avg">Average Shadow Links</option>
+                            <option value="max">Max Shadow Links</option>
+                            <option value="min">Min Shadow Links</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Search</label>
+                        <input type="text" id="searchFilter" placeholder="Search by GV_KEY...">
+                    </div>
+                </div>
+                <div id="orgTableContainer">
+                    <table class="org-table">
+                        <thead>
+                            <tr>
+                                <th onclick="sortTable('gv_key')">GV_KEY ↕</th>
+                                <th onclick="sortTable('year')">Year ↕</th>
+                                <th onclick="sortTable('avg')">Avg Shadow Links ↕</th>
+                                <th onclick="sortTable('std')">Std Dev ↕</th>
+                                <th onclick="sortTable('min')">Min ↕</th>
+                                <th onclick="sortTable('max')">Max ↕</th>
+                                <th onclick="sortTable('obs')">Observations ↕</th>
+                            </tr>
+                        </thead>
+                        <tbody id="orgTableBody">
+                            <tr><td colspan="7" class="loading"><div class="spinner"></div>Loading data...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Network Visualization -->
+            <div class="panel full-width">
+                <h2>Organization Network Structure</h2>
+                <p style="color: #666; margin-bottom: 15px;">Click on an organization in the table above to visualize its structure</p>
+                <div class="network-container" id="networkContainer">
+                    <div class="loading">
+                        <div class="spinner"></div>
+                        Select an organization to view network
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Global state
+        let misalignmentData = [];
+        let sweepData = [];
+        let currentSort = { column: 'avg', direction: 'desc' };
+        let selectedOrg = null;
+        
+        // Load CSV data
+        async function loadData() {
+            try {
+                // Load misalignment data
+                const misalignmentResponse = await fetch('/results/misalignment_potential.csv');
+                const misalignmentText = await misalignmentResponse.text();
+                misalignmentData = parseCSV(misalignmentText);
+                
+                // Load sweep data
+                const sweepResponse = await fetch('/results/sweep_summary.csv');
+                const sweepText = await sweepResponse.text();
+                sweepData = parseCSV(sweepText);
+                
+                // Initialize UI
+                populateFilters();
+                renderSweepChart();
+                renderOrgTable();
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById('orgTableBody').innerHTML = 
+                    '<tr><td colspan="7" style="color: red;">Error loading data. Make sure CSV files are in the results/ directory.</td></tr>';
+            }
+        }
+        
+        function parseCSV(text) {
+            const lines = text.trim().split('\n').filter(l => l.trim());
+            if (lines.length === 0) return [];
+            
+            // Simple CSV parser that handles quoted fields
+            const parseLine = (line) => {
+                const result = [];
+                let current = '';
+                let inQuotes = false;
+                for (let i = 0; i < line.length; i++) {
+                    const char = line[i];
+                    if (char === '"') {
+                        inQuotes = !inQuotes;
+                    } else if (char === ',' && !inQuotes) {
+                        result.push(current.trim());
+                        current = '';
+                    } else {
+                        current += char;
+                    }
+                }
+                result.push(current.trim());
+                return result;
+            };
+            
+            const headers = parseLine(lines[0]);
+            return lines.slice(1).map(line => {
+                const values = parseLine(line);
+                const obj = {};
+                headers.forEach((header, i) => {
+                    obj[header] = values[i] || '';
+                });
+                return obj;
+            }).filter(row => Object.values(row).some(v => v));
+        }
+        
+        function populateFilters() {
+            const yearFilter = document.getElementById('yearFilter');
+            const years = [...new Set(misalignmentData.map(d => d.Year))].sort((a, b) => a - b);
+            years.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                yearFilter.appendChild(option);
+            });
+            
+            yearFilter.addEventListener('change', renderOrgTable);
+            document.getElementById('sortFilter').addEventListener('change', (e) => {
+                currentSort.column = e.target.value === 'avg' ? 'Avg_Shadow_Links' : 
+                                   e.target.value === 'max' ? 'Max_Shadow_Links' : 'Min_Shadow_Links';
+                renderOrgTable();
+            });
+            document.getElementById('searchFilter').addEventListener('input', renderOrgTable);
+        }
+        
+        function renderSweepChart() {
+            const weights = sweepData.map(d => parseFloat(d.Mean_Personal_Weight));
+            const orgRewardMean = sweepData.map(d => parseFloat(d.Org_Reward_Mean));
+            const orgRewardLow = sweepData.map(d => parseFloat(d.Org_Reward_CI_Low));
+            const orgRewardHigh = sweepData.map(d => parseFloat(d.Org_Reward_CI_High));
+            const persRewardMean = sweepData.map(d => parseFloat(d.Personal_Reward_Mean));
+            const persRewardLow = sweepData.map(d => parseFloat(d.Personal_Reward_CI_Low));
+            const persRewardHigh = sweepData.map(d => parseFloat(d.Personal_Reward_CI_High));
+            
+            const trace1 = {
+                x: weights,
+                y: orgRewardMean,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Organizational Reward',
+                line: { color: '#667eea', width: 3 },
+                marker: { size: 8 },
+                error_y: {
+                    type: 'data',
+                    symmetric: false,
+                    array: orgRewardHigh.map((h, i) => h - orgRewardMean[i]),
+                    arrayminus: orgRewardMean.map((m, i) => m - orgRewardLow[i]),
+                    color: '#667eea',
+                    thickness: 2,
+                }
+            };
+            
+            const trace2 = {
+                x: weights,
+                y: persRewardMean,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Personal Reward',
+                line: { color: '#f093fb', width: 3 },
+                marker: { size: 8 },
+                error_y: {
+                    type: 'data',
+                    symmetric: false,
+                    array: persRewardHigh.map((h, i) => h - persRewardMean[i]),
+                    arrayminus: persRewardMean.map((m, i) => m - persRewardLow[i]),
+                    color: '#f093fb',
+                    thickness: 2,
+                }
+            };
+            
+            const layout = {
+                title: {
+                    text: 'Reward Dynamics vs. Personal Weight',
+                    font: { size: 18, color: '#333' }
+                },
+                xaxis: {
+                    title: 'Mean Personal Weight',
+                    gridcolor: '#e0e0e0',
+                },
+                yaxis: {
+                    title: 'Reward',
+                    gridcolor: '#e0e0e0',
+                },
+                hovermode: 'closest',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                legend: {
+                    x: 0.7,
+                    y: 0.95,
+                    bgcolor: 'rgba(255,255,255,0.8)',
+                },
+                margin: { l: 60, r: 30, t: 60, b: 60 },
+            };
+            
+            Plotly.newPlot('sweepChart', [trace1, trace2], layout, {responsive: true});
+        }
+        
+        function renderOrgTable() {
+            const yearFilter = document.getElementById('yearFilter').value;
+            const searchFilter = document.getElementById('searchFilter').value.toLowerCase();
+            
+            let filtered = misalignmentData.filter(d => {
+                const matchYear = !yearFilter || d.Year === yearFilter;
+                const matchSearch = !searchFilter || d.GV_KEY.toLowerCase().includes(searchFilter);
+                return matchYear && matchSearch;
+            });
+            
+            // Sort
+            filtered.sort((a, b) => {
+                const aVal = parseFloat(a[currentSort.column]) || 0;
+                const bVal = parseFloat(b[currentSort.column]) || 0;
+                return currentSort.direction === 'asc' ? aVal - bVal : bVal - aVal;
+            });
+            
+            const tbody = document.getElementById('orgTableBody');
+            tbody.innerHTML = '';
+            
+            if (filtered.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #666;">No organizations match the filters</td></tr>';
+                return;
+            }
+            
+            filtered.forEach(row => {
+                const tr = document.createElement('tr');
+                const avg = parseFloat(row.Avg_Shadow_Links);
+                const badgeClass = avg >= 0.8 ? 'badge-high' : avg >= 0.4 ? 'badge-medium' : 'badge-low';
+                const badgeText = avg >= 0.8 ? 'High' : avg >= 0.4 ? 'Medium' : 'Low';
+                
+                tr.innerHTML = `
+                    <td><strong>${row.GV_KEY}</strong></td>
+                    <td>${row.Year}</td>
+                    <td><span class="badge ${badgeClass}">${avg.toFixed(3)}</span></td>
+                    <td>${parseFloat(row.Std_Shadow_Links).toFixed(3)}</td>
+                    <td>${row.Min_Shadow_Links}</td>
+                    <td>${row.Max_Shadow_Links}</td>
+                    <td>${row.Num_Observations}</td>
+                `;
+                
+                tr.addEventListener('click', () => {
+                    // Remove previous selection
+                    document.querySelectorAll('.org-table tr.selected').forEach(r => r.classList.remove('selected'));
+                    tr.classList.add('selected');
+                    selectedOrg = { gv_key: parseInt(row.GV_KEY), year: parseInt(row.Year) };
+                    loadNetwork(selectedOrg.gv_key, selectedOrg.year);
+                });
+                
+                tbody.appendChild(tr);
+            });
+        }
+        
+        function sortTable(column) {
+            const columnMap = {
+                'gv_key': 'GV_KEY',
+                'year': 'Year',
+                'avg': 'Avg_Shadow_Links',
+                'std': 'Std_Shadow_Links',
+                'min': 'Min_Shadow_Links',
+                'max': 'Max_Shadow_Links',
+                'obs': 'Num_Observations',
+            };
+            
+            if (currentSort.column === columnMap[column]) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.column = columnMap[column];
+                currentSort.direction = 'desc';
+            }
+            renderOrgTable();
+        }
+        
+        async function loadNetwork(gv_key, year) {
+            const container = document.getElementById('networkContainer');
+            container.innerHTML = '<div class="loading"><div class="spinner"></div>Loading network...</div>';
+            
+            try {
+                const response = await fetch(`http://localhost:5000/api/graph/${gv_key}/${year}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    container.innerHTML = `<div class="loading" style="color: red;">Error: ${data.error}</div>`;
+                    return;
+                }
+                
+                renderNetwork(data);
+            } catch (error) {
+                container.innerHTML = `<div class="loading" style="color: red;">Error loading network. Make sure the dashboard server is running (python dashboard_server.py)</div>`;
+                console.error('Error loading network:', error);
+            }
+        }
+        
+        function renderNetwork(data) {
+            const container = document.getElementById('networkContainer');
+            container.innerHTML = '';
+            
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            
+            const svg = d3.select(container)
+                .append('svg')
+                .attr('width', width)
+                .attr('height', height);
+            
+            // Create force simulation
+            const simulation = d3.forceSimulation(data.nodes)
+                .force('link', d3.forceLink(data.edges).id(d => d.id).distance(100))
+                .force('charge', d3.forceManyBody().strength(-300))
+                .force('center', d3.forceCenter(width / 2, height / 2))
+                .force('collision', d3.forceCollide().radius(30));
+            
+            // Create links
+            const link = svg.append('g')
+                .selectAll('line')
+                .data(data.edges)
+                .enter()
+                .append('line')
+                .attr('class', d => {
+                    if (d.type === 'edict') return 'link edict';
+                    if (d.type === 'shadow') return 'link shadow';
+                    return 'link';
+                });
+            
+            // Create nodes
+            const node = svg.append('g')
+                .selectAll('circle')
+                .data(data.nodes)
+                .enter()
+                .append('circle')
+                .attr('class', 'node')
+                .attr('r', d => 8 + d.centrality * 20)
+                .attr('fill', d => {
+                    const hue = d.level * 60;
+                    return d3.interpolateRainbow(hue / 360);
+                })
+                .attr('stroke', '#fff')
+                .attr('stroke-width', 2)
+                .call(drag(simulation));
+            
+            // Add labels
+            const label = svg.append('g')
+                .selectAll('text')
+                .data(data.nodes)
+                .enter()
+                .append('text')
+                .attr('class', 'node-label')
+                .text(d => {
+                    const parts = d.id.split(' [');
+                    return parts[0].substring(0, 15) + (parts[0].length > 15 ? '...' : '');
+                })
+                .attr('dx', 12)
+                .attr('dy', 4);
+            
+            // Update positions on tick
+            simulation.on('tick', () => {
+                link
+                    .attr('x1', d => d.source.x)
+                    .attr('y1', d => d.source.y)
+                    .attr('x2', d => d.target.x)
+                    .attr('y2', d => d.target.y);
+                
+                node
+                    .attr('cx', d => d.x)
+                    .attr('cy', d => d.y);
+                
+                label
+                    .attr('x', d => d.x)
+                    .attr('y', d => d.y);
+            });
+            
+            // Add tooltips
+            node.append('title')
+                .text(d => `${d.id}\nRole: ${d.role}\nLevel: ${d.level}\nCentrality: ${d.centrality.toFixed(3)}`);
+        }
+        
+        function drag(simulation) {
+            function dragstarted(event) {
+                if (!event.active) simulation.alphaTarget(0.3).restart();
+                event.subject.fx = event.subject.x;
+                event.subject.fy = event.subject.y;
+            }
+            
+            function dragged(event) {
+                event.subject.fx = event.x;
+                event.subject.fy = event.y;
+            }
+            
+            function dragended(event) {
+                if (!event.active) simulation.alphaTarget(0);
+                event.subject.fx = null;
+                event.subject.fy = null;
+            }
+            
+            return d3.drag()
+                .on('start', dragstarted)
+                .on('drag', dragged)
+                .on('end', dragended);
+        }
+        
+        // Initialize
+        loadData();
+    </script>
+</body>
+</html>
+

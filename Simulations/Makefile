@@ -4,3 +4,6 @@ medium-test:
 	uv run main.py --mode sweep --n-orgs 100 --repeats 50 --steps 100 --max-nodes 50
 long-test:
 	uv run main.py --mode sweep --n-orgs 500 --repeats 50 --steps 100 --max-nodes 50
+
+dashboard:
+	uv run dashboard_server.py
