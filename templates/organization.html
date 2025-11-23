@@ -202,6 +202,7 @@
         }
 
         function handleSimulationEvent(event) {
+            console.log('Received event:', event);
             switch (event.type) {
                 case 'simulation_started':
                     addActivityMessage(`🚀 Simulation started: ${event.task}`, 'info');
@@ -250,6 +251,15 @@
                 
                 case 'error':
                     addActivityMessage(`❌ Error: ${event.message}`, 'error');
+                    break;
+                
+                case 'ping':
+                    // Keep-alive ping, ignore
+                    break;
+                    
+                default:
+                    console.log('Unhandled event type:', event.type, event);
+                    addActivityMessage(`📨 ${event.type}: ${JSON.stringify(event).substring(0, 100)}`, 'info');
                     break;
             }
         }

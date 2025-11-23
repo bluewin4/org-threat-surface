@@ -177,7 +177,7 @@ def run_simulation(org_id: str, task: str, initiator: str = None):
         agents = {}
         for emp_id, emp_info in org['employees'].items():
             try:
-                agent = create_test_agent(emp_id)
+                agent = create_test_agent(emp_id, emp_info['name'])
                 agents[emp_id] = agent
                 
                 simulation_queue.put({
@@ -204,6 +204,12 @@ def run_simulation(org_id: str, task: str, initiator: str = None):
                 'message': 'No agents could be created'
             })
             return
+        
+        # Register all agent names with each other
+        for agent_id, agent in agents.items():
+            for other_id, other_info in org['employees'].items():
+                if other_id != agent_id:
+                    agent.register_agent_name(other_id, other_info['name'])
         
         # Choose initiator if not specified
         if not initiator or initiator not in agents:

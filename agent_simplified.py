@@ -25,16 +25,18 @@ class Message:
 class Agent:
     """LLM-based agent that represents an employee in the organization."""
     
-    def __init__(self, employee_id: str, prompt_registry: Dict[str, str], gemini_api_key: Optional[str] = None):
+    def __init__(self, employee_id: str, prompt_registry: Dict[str, str], agent_name: Optional[str] = None, gemini_api_key: Optional[str] = None):
         """
         Initialize an LLM agent with Gemini.
         
         Args:
             employee_id: Unique identifier for the employee
             prompt_registry: Dictionary mapping employee classes to system prompts
+            agent_name: Human-readable name for the agent
             gemini_api_key: Optional Gemini API key (will use GEMINI_API_KEY env var if not provided)
         """
         self.employee_id = employee_id
+        self.agent_name = agent_name or employee_id  # Use name if provided, otherwise use ID
         self.prompt_registry = prompt_registry
         
         # Store API key for later use
@@ -91,14 +93,16 @@ class Agent:
         
         # NOW initialize Gemini client with system prompt and tools
         self.client = genai.Client()
-        self.model_id = 'gemini-2.5-pro'  # Using the latest model
-        
+        self.model_id = 'gemini-2.5-flash'  
         # Initialize memory and scratch pad
         self.memory: Dict[str, List[Message]] = {}  # Conversation history per agent
         self.scratch_pad: str = ""
         
         # Starting social capital
         self.social_capital: int = 1000
+        
+        # Store agent name registry for looking up other agents' names
+        self.agent_name_registry: Dict[str, str] = {}
         
     def _query_org_graph_tool(self, employee_id: str) -> Dict:
         """
@@ -153,6 +157,14 @@ class Agent:
     def clear_scratch_pad(self):
         """Clear the scratch pad."""
         self.scratch_pad = ""
+    
+    def register_agent_name(self, agent_id: str, agent_name: str):
+        """Register another agent's name for reference."""
+        self.agent_name_registry[agent_id] = agent_name
+    
+    def get_agent_name(self, agent_id: str) -> str:
+        """Get the name of an agent by ID."""
+        return self.agent_name_registry.get(agent_id, agent_id)
     
     def remember_message(self, message: Message):
         """Store a message in conversation history."""
@@ -222,23 +234,32 @@ Respond with just the agent ID.
         
         # Call Gemini to make decision
         try:
+            print(f"DEBUG: {self.employee_id} choosing contact for task: {task_context}")
+            print(f"DEBUG: Available options: {list(agent_costs.keys())}")
+            print(f"DEBUG: Making Gemini API call...")
+            
             response = self.client.models.generate_content(
                 model=self.model_id,
                 contents=prompt
             )
-        
+            
             chosen_agent = response.text.strip()
+            print(f"DEBUG: Gemini chose: '{chosen_agent}'")
             
             # Validate the response is a valid agent ID
             if chosen_agent in agent_costs:
                 return chosen_agent
             else:
                 # Fallback to lowest cost if LLM returns invalid ID
-                return min(agent_costs.items(), key=lambda x: x[1])[0]
+                fallback = min(agent_costs.items(), key=lambda x: x[1])[0]
+                print(f"DEBUG: Invalid choice, using fallback: {fallback}")
+                return fallback
+            
         except Exception as e:
             # Fallback to lowest cost on error
-            print(f"Gemini error: {e}. Using fallback selection.")
-            return min(agent_costs.items(), key=lambda x: x[1])[0]
+            fallback = min(agent_costs.items(), key=lambda x: x[1])[0]
+            print(f"Gemini error in choose_contact: {e}. Using fallback selection: {fallback}")
+            return fallback
     
     def compose_message(self, to_id: str, task_context: str) -> str:
         """
@@ -258,10 +279,14 @@ Respond with just the agent ID.
             for msg in history[-5:]  # Last 5 messages
         ])
         
+        recipient_name = self.get_agent_name(to_id)
+        
         prompt = f"""
 {self.system_prompt}
 
-You need to communicate with {to_id} about: {task_context}
+Your name: {self.agent_name}
+
+You need to communicate with {recipient_name} (ID: {to_id}) about: {task_context}
 
 Your scratch pad notes: {self.scratch_pad}
 
@@ -272,21 +297,32 @@ Compose a professional message that:
 1. Is relevant to your role and the task
 2. Builds on any previous conversations
 3. Is clear and actionable
+4. Addresses {recipient_name} by name
 
 Message:
 """
         
         # Call Gemini to compose message
         try:
+            print(f"DEBUG: Composing message from {self.employee_id} to {to_id}")
+            print(f"DEBUG: Prompt length: {len(prompt)}")
+            print(f"DEBUG: Making Gemini API call...")
+            
+            # Make the API call
             response = self.client.models.generate_content(
                 model=self.model_id,
                 contents=prompt
             )
-            return response.text.strip()
+            
+            print(f"DEBUG: Gemini API call completed")
+            message_content = response.text.strip()
+            print(f"DEBUG: Gemini response: {message_content}")
+            return message_content
+            
         except Exception as e:
             # Fallback message on error
-            print(f"Gemini error: {e}. Using fallback message.")
-            return f"Regarding {task_context}, I'd like to discuss this further with you."
+            print(f"Gemini error in compose_message: {e}. Using fallback message.")
+            return f"Hi! Regarding {task_context}, I'd like to discuss this further with you. Could we collaborate on this?"
     
     def send_message(self, to_id: str, content: str, distance: Optional[int] = None) -> Optional[Message]:
         """

@@ -120,7 +120,7 @@ def mock_calculate_distance(self, from_id: str, to_id: str) -> int:
     return mock_api.get_distance(from_id, to_id)
 
 
-def create_test_agent(employee_id: str) -> Agent:
+def create_test_agent(employee_id: str, agent_name: str = None) -> Agent:
     """Create an agent with mocked API calls."""
     
     # Define comprehensive prompts
@@ -192,7 +192,7 @@ When communicating:
     }
     
     # Create agent
-    agent = Agent(employee_id, prompt_registry)
+    agent = Agent(employee_id, prompt_registry, agent_name)
     
     # Monkey patch the methods
     agent._query_org_graph_tool = lambda eid: mock_query_org_graph(agent, eid)
