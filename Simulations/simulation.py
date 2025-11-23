@@ -1424,14 +1424,22 @@ def main(argv: Optional[List[str]] = None) -> None:
         ax1.set_title("Impact of Personal Gain Weight on Rewards (with 95% Confidence Intervals)")
 
         # Bottom plot: Shadow links with CI
+        # Convert to total shadow links (multiply by number of runs)
+        total_runs = args.n_orgs * args.repeats
+        shadow_totals_mean = [m * total_runs for m in results_shadow_mean]
+        shadow_totals_ci_low = [m * total_runs for m in results_shadow_ci_low]
+        shadow_totals_ci_high = [m * total_runs for m in results_shadow_ci_high]
+        
         ax2.set_xlabel("Mean Personal Weight")
-        ax2.set_ylabel("Average Shadow Links per Run", color="tab:red")
-        ax2.fill_between(weights, results_shadow_ci_low, results_shadow_ci_high, alpha=0.2, color="tab:red", label="Shadow Links 95% CI")
-        ax2.plot(weights, results_shadow_mean, marker="^", linestyle="--", label="Shadow Links", color="tab:red", linewidth=2)
+        ax2.set_ylabel("Total Shadow Links (across all runs)", color="tab:red")
+        ax2.fill_between(weights, shadow_totals_ci_low, shadow_totals_ci_high, alpha=0.2, color="tab:red", label="Shadow Links 95% CI")
+        ax2.plot(weights, shadow_totals_mean, marker="^", linestyle="--", label="Shadow Links", color="tab:red", linewidth=2)
         ax2.tick_params(axis="y", labelcolor="tab:red")
         ax2.grid(True, alpha=0.3)
         ax2.legend(loc="upper left")
         ax2.set_title("Shadow Structure Formation vs Personal Gain Weight")
+        # Ensure y-axis starts at 0 for clarity
+        ax2.set_ylim(bottom=0)
 
         plt.tight_layout()
         plt.savefig("sweep_results.png", dpi=150)
