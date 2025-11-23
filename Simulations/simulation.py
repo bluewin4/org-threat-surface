@@ -1448,19 +1448,40 @@ def main(argv: Optional[List[str]] = None) -> None:
         
         # Plot misalignment potential by org structure
         if org_misalignment_potential:
-            fig, ax = plt.subplots(figsize=(14, 8))
-            
             # Compute average shadow links per org across all weights
             org_avg_shadow = {k: np.mean(v) for k, v in org_misalignment_potential.items()}
-            org_std_shadow = {k: np.std(v) for k, v in org_misalignment_potential.items()}
+            org_std_shadow = {k: np.std(v, ddof=1) for k, v in org_misalignment_potential.items()}
+            org_min_shadow = {k: np.min(v) for k, v in org_misalignment_potential.items()}
+            org_max_shadow = {k: np.max(v) for k, v in org_misalignment_potential.items()}
+            org_count_shadow = {k: len(v) for k, v in org_misalignment_potential.items()}
             
-            # Sort by average shadow links (misalignment potential)
+            # Export to CSV
+            csv_data = []
+            for (gv_key, year), avg_val in org_avg_shadow.items():
+                csv_data.append({
+                    "GV_KEY": gv_key,
+                    "Year": year,
+                    "Avg_Shadow_Links": avg_val,
+                    "Std_Shadow_Links": org_std_shadow[(gv_key, year)],
+                    "Min_Shadow_Links": org_min_shadow[(gv_key, year)],
+                    "Max_Shadow_Links": org_max_shadow[(gv_key, year)],
+                    "Num_Observations": org_count_shadow[(gv_key, year)],
+                })
+            
+            df_misalignment = pd.DataFrame(csv_data)
+            df_misalignment = df_misalignment.sort_values("Avg_Shadow_Links", ascending=False)
+            csv_path = "misalignment_potential.csv"
+            df_misalignment.to_csv(csv_path, index=False)
+            print(f"Saved misalignment potential data to {csv_path}")
+            
+            # Sort by average shadow links (misalignment potential) for plotting
             sorted_orgs = sorted(org_avg_shadow.items(), key=lambda x: x[1], reverse=True)
             org_labels = [f"{gv}-{yr}" for (gv, yr), _ in sorted_orgs]
             avg_values = [v for _, v in sorted_orgs]
             std_values = [org_std_shadow[k] for k, _ in sorted_orgs]
             
             # Bar plot with error bars
+            fig, ax = plt.subplots(figsize=(14, 8))
             x_pos = np.arange(len(org_labels))
             bars = ax.bar(x_pos, avg_values, yerr=std_values, capsize=5, alpha=0.7, color="coral", edgecolor="darkred")
             ax.set_xlabel("Organization Structure (GV_KEY-Year)")
