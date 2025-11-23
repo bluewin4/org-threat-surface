@@ -1,0 +1,36 @@
+Variable,Description
+year,Fiscal Year
+company,Company Name in Compustat
+GV_KEY,Compustat gvkey identifier for firm
+ticker,Company Ticker
+cusip,Company Cusip (nine-digit)
+GICGroups,Global Industry Classification (GIC) Groups
+GICIndustries,GIC Industries
+GICSectors,GIC Sectors
+GICSubIndustries,GIC Sub Industries
+sic_code,Standard Industry Classification
+CIK,CIK (Central Index Key) identifier
+role,Title of Executive in Financial Filing
+last_name,Surname of Executive
+first_name,First name of Executive
+full_name,Full Name of Executive
+uniqueid,Unique identifier for executive in a specific firm-year (unit of analysis of database
+TMT Source,Where the executive data was collected: 10K – SEC 10-K Annual filing DEF14A – SEC filed company proxy statement AR – Company Annual Report
+vp,1 if rank of executive is Vice President
+svp,1 if rank of executive is Senior Vice President
+evp,1 if rank of executive is Executive Vice President
+sevp,1 if rank of executive is Senior Executive Vice President
+dir,1 if rank of executive is Director
+sdir,1 if rank of executive is Senior Director
+md,1 if rank of executive is Managing Director
+smd,1 if rank of executive is Senior Managing Director
+se,1 if rank of executive is Senior Executive
+vc,1 if rank of executive is Vice Chairman
+svc,1 if rank of executive is Senior Vice Chairman
+president,1 if rank of executive is President
+board,1 if an executive has a board role
+ceo,1 if executive is the Chief Executive Officer of the entire firm
+cxo,"1 if Chief Officer e.g., COO, CFO"
+primary,1 if executive has a primary value chain activity role
+support,1 if executive has a support role
+bu,1 if executive has a business unit role
