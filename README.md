@@ -359,3 +359,7 @@ The simulation can use three data sources:
 3. **Master**: `master_SP500_TMT.csv` - Full SP500 TMT dataset (199,656 rows)
 
 Organizations are built from real-world executive data, inferring hierarchy levels from job titles and creating approximate reporting structures.
+
+## Extending this work
+
+See the `agents` branch!
