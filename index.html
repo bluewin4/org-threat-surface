@@ -1,0 +1,918 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organization Threat Surface Simulator</title>
+    
+    <!-- Plotly.js for interactive charts -->
+    <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+    
+    <!-- D3.js for data manipulation -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1800px;
+            margin: 0 auto;
+        }
+        
+        header {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(15px);
+            padding: 40px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+            text-align: center;
+        }
+        
+        h1 {
+            font-size: 3em;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+        
+        .subtitle {
+            color: #666;
+            font-size: 1.2em;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .tab-button {
+            flex: 1;
+            padding: 15px 25px;
+            background: white;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            color: #666;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .tab-button:hover {
+            border-color: #667eea;
+            color: #667eea;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.2);
+        }
+        
+        .tab-button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-color: transparent;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .panel {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(15px);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s;
+        }
+        
+        .panel:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+        
+        .panel h2 {
+            color: #667eea;
+            margin-bottom: 20px;
+            font-size: 1.6em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .stat-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.3);
+            transition: transform 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: scale(1.05);
+        }
+        
+        .stat-card h3 {
+            font-size: 2.5em;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+        
+        .stat-card p {
+            opacity: 0.95;
+            font-size: 1em;
+            font-weight: 500;
+        }
+        
+        .chart-container {
+            height: 500px;
+            width: 100%;
+            background: white;
+            border-radius: 10px;
+            padding: 10px;
+        }
+        
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background: white;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        
+        .data-table thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .data-table th {
+            padding: 15px;
+            text-align: left;
+            font-weight: 600;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        
+        .data-table th:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .data-table td {
+            padding: 15px;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        
+        .data-table tbody tr {
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+        
+        .data-table tbody tr:hover {
+            background: #f8f9ff;
+            transform: translateX(5px);
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        
+        .badge-high {
+            background: #ffebee;
+            color: #c62828;
+        }
+        
+        .badge-medium {
+            background: #fff3e0;
+            color: #e65100;
+        }
+        
+        .badge-low {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+        
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 300px;
+            font-size: 1.2em;
+            color: #666;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-right: 15px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .filters {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-bottom: 25px;
+            padding: 20px;
+            background: #f8f9ff;
+            border-radius: 10px;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .filter-group label {
+            font-size: 0.9em;
+            color: #666;
+            font-weight: 600;
+        }
+        
+        .filter-group select,
+        .filter-group input {
+            padding: 12px 18px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 1em;
+            transition: all 0.3s;
+            background: white;
+            min-width: 180px;
+        }
+        
+        .filter-group select:focus,
+        .filter-group input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+        }
+        
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #c62828;
+        }
+        
+        .info {
+            background: #e3f2fd;
+            color: #1565c0;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+            border-left: 4px solid #1565c0;
+        }
+        
+        footer {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 30px;
+            border-radius: 15px;
+            margin-top: 30px;
+            text-align: center;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        footer p {
+            color: #666;
+            line-height: 1.6;
+            margin: 10px 0;
+        }
+        
+        .emoji {
+            font-size: 1.3em;
+            margin-right: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🏢 Organization Threat Surface Simulator</h1>
+            <p class="subtitle">
+                Interactive analysis of organizational misalignment, shadow structures, and threat surfaces.
+                Explore how personal incentives create hidden power dynamics within hierarchies.
+            </p>
+        </header>
+        
+        <div class="tabs">
+            <button class="tab-button active" onclick="switchTab('overview')">
+                <span class="emoji">📊</span> Overview
+            </button>
+            <button class="tab-button" onclick="switchTab('sweep')">
+                <span class="emoji">📈</span> Sweep Analysis
+            </button>
+            <button class="tab-button" onclick="switchTab('misalignment')">
+                <span class="emoji">⚠️</span> Misalignment Data
+            </button>
+            <button class="tab-button" onclick="switchTab('insights')">
+                <span class="emoji">💡</span> Key Insights
+            </button>
+        </div>
+        
+        <!-- Overview Tab -->
+        <div id="overview" class="tab-content active">
+            <div class="stat-cards">
+                <div class="stat-card">
+                    <h3 id="statOrgs">-</h3>
+                    <p>Organizations Analyzed</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="statSimulations">-</h3>
+                    <p>Total Simulations</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="statAvgShadow">-</h3>
+                    <p>Avg Shadow Links</p>
+                </div>
+                <div class="stat-card">
+                    <h3 id="statMaxShadow">-</h3>
+                    <p>Max Shadow Links</p>
+                </div>
+            </div>
+            
+            <div class="dashboard-grid">
+                <div class="panel full-width">
+                    <h2><span class="emoji">📊</span> Reward Dynamics Overview</h2>
+                    <div class="chart-container" id="overviewChart"></div>
+                </div>
+                
+                <div class="panel">
+                    <h2><span class="emoji">🎯</span> Top Organizations by Risk</h2>
+                    <div id="topOrgs"></div>
+                </div>
+                
+                <div class="panel">
+                    <h2><span class="emoji">📉</span> Distribution Summary</h2>
+                    <div class="chart-container" id="distributionChart" style="height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Sweep Analysis Tab -->
+        <div id="sweep" class="tab-content">
+            <div class="panel full-width">
+                <h2><span class="emoji">📈</span> Parameter Sweep Results</h2>
+                <p style="color: #666; margin-bottom: 20px;">
+                    This analysis shows how different levels of personal weight affect organizational and personal rewards.
+                </p>
+                <div class="chart-container" id="sweepChart"></div>
+            </div>
+            
+            <div class="dashboard-grid">
+                <div class="panel">
+                    <h2><span class="emoji">🔗</span> Shadow Links Formation</h2>
+                    <div class="chart-container" id="shadowLinksChart" style="height: 400px;"></div>
+                </div>
+                
+                <div class="panel">
+                    <h2><span class="emoji">📊</span> Reward Trade-offs</h2>
+                    <div class="chart-container" id="tradeoffChart" style="height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Misalignment Data Tab -->
+        <div id="misalignment" class="tab-content">
+            <div class="panel full-width">
+                <h2><span class="emoji">⚠️</span> Organization Misalignment Potential</h2>
+                
+                <div class="filters">
+                    <div class="filter-group">
+                        <label>Filter by Year</label>
+                        <select id="yearFilter" onchange="filterMisalignmentTable()">
+                            <option value="">All Years</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Minimum Avg Shadow Links</label>
+                        <input type="number" id="minShadowFilter" step="0.1" min="0" placeholder="0.0" onchange="filterMisalignmentTable()">
+                    </div>
+                    <div class="filter-group">
+                        <label>Sort By</label>
+                        <select id="sortBy" onchange="filterMisalignmentTable()">
+                            <option value="avg_desc">Avg Shadow Links (High to Low)</option>
+                            <option value="avg_asc">Avg Shadow Links (Low to High)</option>
+                            <option value="max_desc">Max Shadow Links (High to Low)</option>
+                            <option value="year_desc">Year (Newest First)</option>
+                            <option value="year_asc">Year (Oldest First)</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>GV_KEY</th>
+                            <th>Year</th>
+                            <th>Avg Shadow Links</th>
+                            <th>Std Dev</th>
+                            <th>Min</th>
+                            <th>Max</th>
+                            <th>Observations</th>
+                            <th>Risk Level</th>
+                        </tr>
+                    </thead>
+                    <tbody id="misalignmentTableBody">
+                        <tr><td colspan="8" class="loading"><div class="spinner"></div>Loading data...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- Key Insights Tab -->
+        <div id="insights" class="tab-content">
+            <div class="dashboard-grid">
+                <div class="panel">
+                    <h2><span class="emoji">💡</span> What is Organizational Misalignment?</h2>
+                    <p style="line-height: 1.8; color: #555;">
+                        Organizational misalignment occurs when individual agents prioritize personal goals 
+                        over organizational objectives. This creates "shadow structures" - informal power 
+                        networks that operate outside official hierarchies and can pose security risks.
+                    </p>
+                </div>
+                
+                <div class="panel">
+                    <h2><span class="emoji">🔍</span> Key Findings</h2>
+                    <div id="keyFindings"></div>
+                </div>
+                
+                <div class="panel full-width">
+                    <h2><span class="emoji">📖</span> Methodology</h2>
+                    <p style="line-height: 1.8; color: #555; margin-bottom: 15px;">
+                        This simulator uses agent-based modeling to analyze organizational structures. 
+                        Each simulation:
+                    </p>
+                    <ul style="line-height: 2; color: #555; padding-left: 30px;">
+                        <li>Models agents with varying personal vs. organizational weight preferences</li>
+                        <li>Tracks communication patterns and edict issuance</li>
+                        <li>Identifies "shadow links" - connections that bypass official hierarchy</li>
+                        <li>Measures organizational and personal rewards over time</li>
+                        <li>Analyzes how misalignment correlates with threat surface expansion</li>
+                    </ul>
+                </div>
+                
+                <div class="panel full-width" id="dataSourcesPanel">
+                    <h2><span class="emoji">📂</span> Data Sources</h2>
+                    <div id="dataSourcesInfo"></div>
+                </div>
+            </div>
+        </div>
+        
+        <footer>
+            <p><strong>Organization Threat Surface Simulator</strong></p>
+            <p>This tool helps understand how organizational dynamics create security vulnerabilities through shadow structures and misaligned incentives.</p>
+            <p style="margin-top: 15px; font-size: 0.9em;">Data last updated: <span id="lastUpdated">-</span></p>
+        </footer>
+    </div>
+    
+    <script>
+        // Global data storage
+        let sweepData = [];
+        let misalignmentData = [];
+        let filteredMisalignmentData = [];
+        
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadAllData();
+        });
+        
+        // Tab switching
+        function switchTab(tabName) {
+            // Hide all tabs
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected tab
+            document.getElementById(tabName).classList.add('active');
+            event.target.closest('.tab-button').classList.add('active');
+        }
+        
+        // Load all CSV data
+        async function loadAllData() {
+            try {
+                await Promise.all([
+                    loadSweepData(),
+                    loadMisalignmentData()
+                ]);
+                
+                renderAllCharts();
+                updateStatCards();
+                populateKeyFindings();
+                updateDataSources();
+            } catch (error) {
+                console.error('Error loading data:', error);
+                showError('Failed to load simulation data. Please ensure CSV files are in Simulations/results/');
+            }
+        }
+        
+        async function loadSweepData() {
+            const response = await fetch('Simulations/results/sweep_summary.csv');
+            const text = await response.text();
+            sweepData = parseCSV(text);
+        }
+        
+        async function loadMisalignmentData() {
+            const response = await fetch('Simulations/results/misalignment_potential.csv');
+            const text = await response.text();
+            misalignmentData = parseCSV(text);
+            filteredMisalignmentData = [...misalignmentData];
+            
+            // Populate year filter
+            const years = [...new Set(misalignmentData.map(d => d.Year))].sort((a, b) => b - a);
+            const yearFilter = document.getElementById('yearFilter');
+            years.forEach(year => {
+                const option = document.createElement('option');
+                option.value = year;
+                option.textContent = year;
+                yearFilter.appendChild(option);
+            });
+        }
+        
+        function parseCSV(text) {
+            const lines = text.trim().split('\n').filter(l => l.trim());
+            if (lines.length === 0) return [];
+            
+            const headers = lines[0].split(',').map(h => h.trim());
+            return lines.slice(1).map(line => {
+                const values = line.split(',').map(v => v.trim());
+                const obj = {};
+                headers.forEach((header, i) => {
+                    obj[header] = values[i] || '';
+                });
+                return obj;
+            }).filter(row => Object.values(row).some(v => v));
+        }
+        
+        function updateStatCards() {
+            const numOrgs = misalignmentData.length;
+            const totalObs = misalignmentData.reduce((sum, d) => sum + parseFloat(d.Num_Observations || 0), 0);
+            const avgShadow = misalignmentData.reduce((sum, d) => sum + parseFloat(d.Avg_Shadow_Links || 0), 0) / numOrgs;
+            const maxShadow = Math.max(...misalignmentData.map(d => parseFloat(d.Max_Shadow_Links || 0)));
+            
+            document.getElementById('statOrgs').textContent = numOrgs;
+            document.getElementById('statSimulations').textContent = totalObs;
+            document.getElementById('statAvgShadow').textContent = avgShadow.toFixed(2);
+            document.getElementById('statMaxShadow').textContent = maxShadow;
+            
+            // Update last updated time
+            document.getElementById('lastUpdated').textContent = new Date().toLocaleDateString();
+        }
+        
+        function renderAllCharts() {
+            renderOverviewChart();
+            renderSweepChart();
+            renderShadowLinksChart();
+            renderTradeoffChart();
+            renderDistributionChart();
+            renderTopOrgs();
+            filterMisalignmentTable();
+        }
+        
+        function renderOverviewChart() {
+            const weights = sweepData.map(d => parseFloat(d.Mean_Personal_Weight));
+            const orgReward = sweepData.map(d => parseFloat(d.Org_Reward_Mean));
+            const persReward = sweepData.map(d => parseFloat(d.Personal_Reward_Mean));
+            
+            const trace1 = {
+                x: weights,
+                y: orgReward,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Organizational Reward',
+                line: { color: '#667eea', width: 3 },
+                marker: { size: 10 }
+            };
+            
+            const trace2 = {
+                x: weights,
+                y: persReward,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Personal Reward',
+                line: { color: '#f093fb', width: 3 },
+                marker: { size: 10 }
+            };
+            
+            const layout = {
+                title: 'Reward Dynamics vs Personal Weight',
+                xaxis: { title: 'Mean Personal Weight' },
+                yaxis: { title: 'Reward' },
+                hovermode: 'closest',
+                showlegend: true,
+                legend: { x: 0.7, y: 1 }
+            };
+            
+            Plotly.newPlot('overviewChart', [trace1, trace2], layout, {responsive: true});
+        }
+        
+        function renderSweepChart() {
+            const weights = sweepData.map(d => parseFloat(d.Mean_Personal_Weight));
+            const orgMean = sweepData.map(d => parseFloat(d.Org_Reward_Mean));
+            const orgLow = sweepData.map(d => parseFloat(d.Org_Reward_CI_Low));
+            const orgHigh = sweepData.map(d => parseFloat(d.Org_Reward_CI_High));
+            const persMean = sweepData.map(d => parseFloat(d.Personal_Reward_Mean));
+            const persLow = sweepData.map(d => parseFloat(d.Personal_Reward_CI_Low));
+            const persHigh = sweepData.map(d => parseFloat(d.Personal_Reward_CI_High));
+            
+            const trace1 = {
+                x: weights,
+                y: orgMean,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Org Reward',
+                line: { color: '#667eea', width: 3 },
+                marker: { size: 8 },
+                error_y: {
+                    type: 'data',
+                    symmetric: false,
+                    array: orgHigh.map((h, i) => h - orgMean[i]),
+                    arrayminus: orgMean.map((m, i) => m - orgLow[i]),
+                    color: '#667eea'
+                }
+            };
+            
+            const trace2 = {
+                x: weights,
+                y: persMean,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Personal Reward',
+                line: { color: '#f093fb', width: 3 },
+                marker: { size: 8 },
+                error_y: {
+                    type: 'data',
+                    symmetric: false,
+                    array: persHigh.map((h, i) => h - persMean[i]),
+                    arrayminus: persMean.map((m, i) => m - persLow[i]),
+                    color: '#f093fb'
+                }
+            };
+            
+            const layout = {
+                title: 'Reward Dynamics with Confidence Intervals',
+                xaxis: { title: 'Mean Personal Weight' },
+                yaxis: { title: 'Reward' },
+                hovermode: 'closest'
+            };
+            
+            Plotly.newPlot('sweepChart', [trace1, trace2], layout, {responsive: true});
+        }
+        
+        function renderShadowLinksChart() {
+            const weights = sweepData.map(d => parseFloat(d.Mean_Personal_Weight));
+            const shadowLinks = sweepData.map(d => parseFloat(d.Shadow_Links_Mean));
+            const shadowLow = sweepData.map(d => parseFloat(d.Shadow_Links_CI_Low));
+            const shadowHigh = sweepData.map(d => parseFloat(d.Shadow_Links_CI_High));
+            
+            const trace = {
+                x: weights,
+                y: shadowLinks,
+                type: 'bar',
+                name: 'Shadow Links',
+                marker: { 
+                    color: shadowLinks,
+                    colorscale: 'Reds',
+                    showscale: true,
+                    colorbar: { title: 'Shadow Links' }
+                },
+                error_y: {
+                    type: 'data',
+                    symmetric: false,
+                    array: shadowHigh.map((h, i) => h - shadowLinks[i]),
+                    arrayminus: shadowLinks.map((m, i) => m - shadowLow[i])
+                }
+            };
+            
+            const layout = {
+                title: 'Shadow Link Formation by Personal Weight',
+                xaxis: { title: 'Mean Personal Weight' },
+                yaxis: { title: 'Average Shadow Links per Agent' }
+            };
+            
+            Plotly.newPlot('shadowLinksChart', [trace], layout, {responsive: true});
+        }
+        
+        function renderTradeoffChart() {
+            const orgReward = sweepData.map(d => parseFloat(d.Org_Reward_Mean));
+            const persReward = sweepData.map(d => parseFloat(d.Personal_Reward_Mean));
+            const weights = sweepData.map(d => parseFloat(d.Mean_Personal_Weight));
+            
+            const trace = {
+                x: orgReward,
+                y: persReward,
+                type: 'scatter',
+                mode: 'markers+text',
+                marker: {
+                    size: 15,
+                    color: weights,
+                    colorscale: 'Viridis',
+                    showscale: true,
+                    colorbar: { title: 'Personal Weight' }
+                },
+                text: weights.map(w => w.toFixed(1)),
+                textposition: 'top center'
+            };
+            
+            const layout = {
+                title: 'Organizational vs Personal Reward Trade-off',
+                xaxis: { title: 'Organizational Reward' },
+                yaxis: { title: 'Personal Reward' }
+            };
+            
+            Plotly.newPlot('tradeoffChart', [trace], layout, {responsive: true});
+        }
+        
+        function renderDistributionChart() {
+            const shadowLinks = misalignmentData.map(d => parseFloat(d.Avg_Shadow_Links));
+            
+            const trace = {
+                x: shadowLinks,
+                type: 'histogram',
+                marker: { color: '#667eea' },
+                nbinsx: 15
+            };
+            
+            const layout = {
+                title: 'Distribution of Average Shadow Links',
+                xaxis: { title: 'Average Shadow Links' },
+                yaxis: { title: 'Frequency' }
+            };
+            
+            Plotly.newPlot('distributionChart', [trace], layout, {responsive: true});
+        }
+        
+        function renderTopOrgs() {
+            const sorted = [...misalignmentData].sort((a, b) => 
+                parseFloat(b.Avg_Shadow_Links) - parseFloat(a.Avg_Shadow_Links)
+            ).slice(0, 5);
+            
+            let html = '<table class="data-table" style="font-size: 0.9em;"><thead><tr><th>GV_KEY</th><th>Year</th><th>Avg Shadow</th></tr></thead><tbody>';
+            sorted.forEach(org => {
+                const riskLevel = parseFloat(org.Avg_Shadow_Links) > 0.8 ? 'high' : 
+                                 parseFloat(org.Avg_Shadow_Links) > 0.5 ? 'medium' : 'low';
+                html += `<tr>
+                    <td><strong>${org.GV_KEY}</strong></td>
+                    <td>${org.Year}</td>
+                    <td><span class="badge badge-${riskLevel}">${parseFloat(org.Avg_Shadow_Links).toFixed(2)}</span></td>
+                </tr>`;
+            });
+            html += '</tbody></table>';
+            document.getElementById('topOrgs').innerHTML = html;
+        }
+        
+        function filterMisalignmentTable() {
+            const yearFilter = document.getElementById('yearFilter').value;
+            const minShadow = parseFloat(document.getElementById('minShadowFilter').value) || 0;
+            const sortBy = document.getElementById('sortBy').value;
+            
+            // Filter
+            filteredMisalignmentData = misalignmentData.filter(d => {
+                if (yearFilter && d.Year !== yearFilter) return false;
+                if (parseFloat(d.Avg_Shadow_Links) < minShadow) return false;
+                return true;
+            });
+            
+            // Sort
+            filteredMisalignmentData.sort((a, b) => {
+                switch(sortBy) {
+                    case 'avg_desc': return parseFloat(b.Avg_Shadow_Links) - parseFloat(a.Avg_Shadow_Links);
+                    case 'avg_asc': return parseFloat(a.Avg_Shadow_Links) - parseFloat(b.Avg_Shadow_Links);
+                    case 'max_desc': return parseFloat(b.Max_Shadow_Links) - parseFloat(a.Max_Shadow_Links);
+                    case 'year_desc': return parseInt(b.Year) - parseInt(a.Year);
+                    case 'year_asc': return parseInt(a.Year) - parseInt(b.Year);
+                    default: return 0;
+                }
+            });
+            
+            // Render
+            let html = '';
+            filteredMisalignmentData.forEach(org => {
+                const avgShadow = parseFloat(org.Avg_Shadow_Links);
+                const riskLevel = avgShadow > 0.8 ? 'high' : avgShadow > 0.5 ? 'medium' : 'low';
+                const riskText = avgShadow > 0.8 ? 'High' : avgShadow > 0.5 ? 'Medium' : 'Low';
+                
+                html += `<tr>
+                    <td><strong>${org.GV_KEY}</strong></td>
+                    <td>${org.Year}</td>
+                    <td>${avgShadow.toFixed(3)}</td>
+                    <td>${parseFloat(org.Std_Shadow_Links).toFixed(3)}</td>
+                    <td>${org.Min_Shadow_Links}</td>
+                    <td>${org.Max_Shadow_Links}</td>
+                    <td>${org.Num_Observations}</td>
+                    <td><span class="badge badge-${riskLevel}">${riskText}</span></td>
+                </tr>`;
+            });
+            
+            document.getElementById('misalignmentTableBody').innerHTML = html || 
+                '<tr><td colspan="8" style="text-align:center; padding: 40px;">No data matches the current filters</td></tr>';
+        }
+        
+        function populateKeyFindings() {
+            const avgOrgReward = sweepData.reduce((s, d) => s + parseFloat(d.Org_Reward_Mean), 0) / sweepData.length;
+            const avgPersonalReward = sweepData.reduce((s, d) => s + parseFloat(d.Personal_Reward_Mean), 0) / sweepData.length;
+            const maxShadowLinks = Math.max(...misalignmentData.map(d => parseFloat(d.Max_Shadow_Links)));
+            const highRiskOrgs = misalignmentData.filter(d => parseFloat(d.Avg_Shadow_Links) > 0.7).length;
+            
+            const findings = [
+                `Personal rewards are ${(avgPersonalReward / avgOrgReward).toFixed(1)}x higher than organizational rewards on average`,
+                `Maximum observed shadow links: ${maxShadowLinks} in a single organization`,
+                `${highRiskOrgs} organizations show high misalignment risk (avg shadow links > 0.7)`,
+                `Shadow link formation increases significantly as personal weight exceeds 0.5`
+            ];
+            
+            let html = '<ul style="line-height: 2.2; color: #555; padding-left: 25px;">';
+            findings.forEach(finding => {
+                html += `<li><strong>${finding}</strong></li>`;
+            });
+            html += '</ul>';
+            
+            document.getElementById('keyFindings').innerHTML = html;
+        }
+        
+        function updateDataSources() {
+            const info = `
+                <p style="line-height: 1.8; color: #555;">
+                    <strong>Sweep Summary:</strong> ${sweepData.length} parameter configurations tested<br>
+                    <strong>Misalignment Data:</strong> ${misalignmentData.length} organization-year combinations analyzed<br>
+                    <strong>Location:</strong> <code>Simulations/results/</code>
+                </p>
+            `;
+            document.getElementById('dataSourcesInfo').innerHTML = info;
+        }
+        
+        function showError(message) {
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'error';
+            errorDiv.textContent = message;
+            document.querySelector('.container').insertBefore(errorDiv, document.querySelector('header').nextSibling);
+        }
+    </script>
+</body>
+</html>
