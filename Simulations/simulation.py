@@ -907,16 +907,21 @@ def run_master_batch_experiment(
     steps: int = 100,
     max_nodes: Optional[int] = None,
     mean_personal_weight: float = 0.3,
-) -> Tuple[np.ndarray, np.ndarray, int]:
+    return_individual_runs: bool = False,
+) -> Tuple[np.ndarray, np.ndarray, int, Optional[List[Tuple[int, int, float, float, int]]]]:
     """
     Run repeated simulations over many firm-year org structures from the
     master SP500 TMT dataset and aggregate reward dynamics and shadow links.
     Uses multiprocessing to parallelize runs over available CPU cores.
 
+    Args:
+        return_individual_runs: If True, also return per-run statistics for CI computation.
+
     Returns:
         org_avg: average org score per step across all runs
         pers_avg: average personal score per step across all runs
         total_shadow_links: total number of shadow links created across runs
+        individual_runs: Optional list of (gv_key, year, final_org, final_pers, shadow_count) tuples
     """
     if not os.path.exists(master_path):
         raise FileNotFoundError(f"master file not found at {master_path}")
@@ -932,9 +937,11 @@ def run_master_batch_experiment(
     )
 
     tasks = []
-    for _, row in sample.iterrows():
+    org_year_map = {}
+    for idx, (_, row) in enumerate(sample.iterrows()):
         gv = int(row["GV_KEY"])
         yr = int(row["year"])
+        org_year_map[idx] = (gv, yr)
         for _ in range(repeats):
             tasks.append((master_path, gv, yr, steps, max_nodes, mean_personal_weight))
 
@@ -950,9 +957,23 @@ def run_master_batch_experiment(
     pers_sum = np.zeros(steps, dtype=float)
     counts = np.zeros(steps, dtype=float)
     total_shadow_links = 0
-
+    
+    individual_runs = [] if return_individual_runs else None
+    task_idx = 0
+    
     for shadow_count, org_series, pers_series in results:
         total_shadow_links += shadow_count
+        
+        if return_individual_runs:
+            # Compute final values for this run
+            final_org = np.nanmean(org_series[-10:]) if len(org_series) >= 10 else np.nanmean(org_series)
+            final_pers = np.nanmean(pers_series[-10:]) if len(pers_series) >= 10 else np.nanmean(pers_series)
+            # Map back to org-year
+            org_idx = task_idx // repeats
+            gv, yr = org_year_map[org_idx]
+            individual_runs.append((gv, yr, final_org, final_pers, shadow_count))
+            task_idx += 1
+        
         for i in range(steps):
             if not math.isnan(org_series[i]):
                 org_sum[i] += org_series[i]
@@ -961,7 +982,7 @@ def run_master_batch_experiment(
 
     org_avg = np.divide(org_sum, counts, out=np.full_like(org_sum, np.nan), where=counts > 0)
     pers_avg = np.divide(pers_sum, counts, out=np.full_like(pers_sum, np.nan), where=counts > 0)
-    return org_avg, pers_avg, total_shadow_links
+    return org_avg, pers_avg, total_shadow_links, individual_runs
 
 
 def _run_single_simulation_task(args):
@@ -1270,13 +1291,14 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     elif args.mode == "batch":
         # Batch experiment over many master firm-years
-        org_avg, pers_avg, total_shadow = run_master_batch_experiment(
+        org_avg, pers_avg, total_shadow, _ = run_master_batch_experiment(
             master_path=args.master_path,
             n_orgs=args.n_orgs,
             repeats=args.repeats,
             steps=args.steps,
             max_nodes=args.max_nodes,
             mean_personal_weight=args.mean_personal_weight,
+            return_individual_runs=False,
         )
         print(f"Batch experiment complete over {args.n_orgs} orgs x {args.repeats} repeats.")
         print(f"Mean personal weight: {args.mean_personal_weight}")
@@ -1287,58 +1309,161 @@ def main(argv: Optional[List[str]] = None) -> None:
             print(f"Reward plotting failed: {exc}")
 
     elif args.mode == "sweep":
-        # Parameter sweep mode
+        # Parameter sweep mode with confidence intervals
         weights = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
-        results_org = []
-        results_pers = []
-        results_shadow = []
+        results_org_mean = []
+        results_org_ci_low = []
+        results_org_ci_high = []
+        results_pers_mean = []
+        results_pers_ci_low = []
+        results_pers_ci_high = []
+        results_shadow_mean = []
+        results_shadow_ci_low = []
+        results_shadow_ci_high = []
+        
+        # Store per-org misalignment potential
+        org_misalignment_potential = {}  # (gv_key, year) -> list of shadow_counts across weights
 
         print(f"Starting sweep over weights: {weights}")
         for w in weights:
             print(f"  Running batch for weight={w}...")
-            org_avg, pers_avg, total_shadow = run_master_batch_experiment(
+            org_avg, pers_avg, total_shadow, individual_runs = run_master_batch_experiment(
                 master_path=args.master_path,
                 n_orgs=args.n_orgs,
                 repeats=args.repeats,
                 steps=args.steps,
                 max_nodes=args.max_nodes,
                 mean_personal_weight=w,
+                return_individual_runs=True,
             )
             # Take the mean of the last 10 steps to represent "final" stable state
             final_org = np.nanmean(org_avg[-10:]) if len(org_avg) >= 10 else np.nanmean(org_avg)
             final_pers = np.nanmean(pers_avg[-10:]) if len(pers_avg) >= 10 else np.nanmean(pers_avg)
             
-            results_org.append(final_org)
-            results_pers.append(final_pers)
-            results_shadow.append(total_shadow)
+            # Compute confidence intervals from individual runs
+            if individual_runs:
+                org_vals = [r[2] for r in individual_runs if not math.isnan(r[2])]
+                pers_vals = [r[3] for r in individual_runs if not math.isnan(r[3])]
+                shadow_vals = [r[4] for r in individual_runs]
+                
+                # 95% CI using standard error (assuming normal distribution)
+                if org_vals:
+                    org_mean = np.mean(org_vals)
+                    org_std = np.std(org_vals, ddof=1)
+                    org_se = org_std / np.sqrt(len(org_vals))
+                    ci_width = 1.96 * org_se  # 95% CI
+                    results_org_mean.append(org_mean)
+                    results_org_ci_low.append(org_mean - ci_width)
+                    results_org_ci_high.append(org_mean + ci_width)
+                else:
+                    results_org_mean.append(final_org)
+                    results_org_ci_low.append(final_org)
+                    results_org_ci_high.append(final_org)
+                
+                if pers_vals:
+                    pers_mean = np.mean(pers_vals)
+                    pers_std = np.std(pers_vals, ddof=1)
+                    pers_se = pers_std / np.sqrt(len(pers_vals))
+                    ci_width = 1.96 * pers_se
+                    results_pers_mean.append(pers_mean)
+                    results_pers_ci_low.append(pers_mean - ci_width)
+                    results_pers_ci_high.append(pers_mean + ci_width)
+                else:
+                    results_pers_mean.append(final_pers)
+                    results_pers_ci_low.append(final_pers)
+                    results_pers_ci_high.append(final_pers)
+                
+                if shadow_vals:
+                    shadow_mean = np.mean(shadow_vals)
+                    shadow_std = np.std(shadow_vals, ddof=1)
+                    shadow_se = shadow_std / np.sqrt(len(shadow_vals))
+                    ci_width = 1.96 * shadow_se
+                    results_shadow_mean.append(shadow_mean)
+                    results_shadow_ci_low.append(shadow_mean - ci_width)
+                    results_shadow_ci_high.append(shadow_mean + ci_width)
+                    
+                    # Track misalignment potential per org
+                    for gv, yr, _, _, shadow_count in individual_runs:
+                        key = (gv, yr)
+                        if key not in org_misalignment_potential:
+                            org_misalignment_potential[key] = []
+                        org_misalignment_potential[key].append(shadow_count)
+                else:
+                    results_shadow_mean.append(total_shadow)
+                    results_shadow_ci_low.append(total_shadow)
+                    results_shadow_ci_high.append(total_shadow)
+            else:
+                # Fallback if no individual runs
+                results_org_mean.append(final_org)
+                results_org_ci_low.append(final_org)
+                results_org_ci_high.append(final_org)
+                results_pers_mean.append(final_pers)
+                results_pers_ci_low.append(final_pers)
+                results_pers_ci_high.append(final_pers)
+                results_shadow_mean.append(total_shadow)
+                results_shadow_ci_low.append(total_shadow)
+                results_shadow_ci_high.append(total_shadow)
 
-        # Plot sweep results
+        # Plot sweep results with confidence intervals
         import matplotlib.pyplot as plt
 
-        fig, ax1 = plt.figure(figsize=(10, 6)), plt.gca()
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(12, 10))
 
-        # Plot rewards on left y-axis
+        # Top plot: Rewards with CI
         ax1.set_xlabel("Mean Personal Weight")
         ax1.set_ylabel("Final Average Reward", color="tab:blue")
-        ax1.plot(weights, results_org, marker="o", label="Org Reward", color="tab:blue")
-        ax1.plot(weights, results_pers, marker="s", label="Personal Reward", color="tab:cyan")
+        ax1.fill_between(weights, results_org_ci_low, results_org_ci_high, alpha=0.2, color="tab:blue", label="Org Reward 95% CI")
+        ax1.fill_between(weights, results_pers_ci_low, results_pers_ci_high, alpha=0.2, color="tab:cyan", label="Personal Reward 95% CI")
+        ax1.plot(weights, results_org_mean, marker="o", label="Org Reward", color="tab:blue", linewidth=2)
+        ax1.plot(weights, results_pers_mean, marker="s", label="Personal Reward", color="tab:cyan", linewidth=2)
         ax1.tick_params(axis="y", labelcolor="tab:blue")
         ax1.grid(True, alpha=0.3)
+        ax1.legend(loc="upper left")
+        ax1.set_title("Impact of Personal Gain Weight on Rewards (with 95% Confidence Intervals)")
 
-        # Plot shadow links on right y-axis
-        ax2 = ax1.twinx()
-        ax2.set_ylabel("Total Shadow Links", color="tab:red")
-        ax2.plot(weights, results_shadow, marker="^", linestyle="--", label="Shadow Links", color="tab:red")
+        # Bottom plot: Shadow links with CI
+        ax2.set_xlabel("Mean Personal Weight")
+        ax2.set_ylabel("Average Shadow Links per Run", color="tab:red")
+        ax2.fill_between(weights, results_shadow_ci_low, results_shadow_ci_high, alpha=0.2, color="tab:red", label="Shadow Links 95% CI")
+        ax2.plot(weights, results_shadow_mean, marker="^", linestyle="--", label="Shadow Links", color="tab:red", linewidth=2)
         ax2.tick_params(axis="y", labelcolor="tab:red")
+        ax2.grid(True, alpha=0.3)
+        ax2.legend(loc="upper left")
+        ax2.set_title("Shadow Structure Formation vs Personal Gain Weight")
 
-        # Combined legend
-        lines1, labels1 = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper center")
-
-        plt.title("Impact of Personal Gain Weight on Rewards and Shadow Structure")
         plt.tight_layout()
+        plt.savefig("sweep_results.png", dpi=150)
+        print("Saved sweep results to sweep_results.png")
         plt.show()
+        
+        # Plot misalignment potential by org structure
+        if org_misalignment_potential:
+            fig, ax = plt.subplots(figsize=(14, 8))
+            
+            # Compute average shadow links per org across all weights
+            org_avg_shadow = {k: np.mean(v) for k, v in org_misalignment_potential.items()}
+            org_std_shadow = {k: np.std(v) for k, v in org_misalignment_potential.items()}
+            
+            # Sort by average shadow links (misalignment potential)
+            sorted_orgs = sorted(org_avg_shadow.items(), key=lambda x: x[1], reverse=True)
+            org_labels = [f"{gv}-{yr}" for (gv, yr), _ in sorted_orgs]
+            avg_values = [v for _, v in sorted_orgs]
+            std_values = [org_std_shadow[k] for k, _ in sorted_orgs]
+            
+            # Bar plot with error bars
+            x_pos = np.arange(len(org_labels))
+            bars = ax.bar(x_pos, avg_values, yerr=std_values, capsize=5, alpha=0.7, color="coral", edgecolor="darkred")
+            ax.set_xlabel("Organization Structure (GV_KEY-Year)")
+            ax.set_ylabel("Average Shadow Links (Misalignment Potential)")
+            ax.set_title("Misalignment Potential by Organizational Structure")
+            ax.set_xticks(x_pos)
+            ax.set_xticklabels(org_labels, rotation=45, ha="right")
+            ax.grid(True, alpha=0.3, axis="y")
+            
+            plt.tight_layout()
+            plt.savefig("misalignment_potential.png", dpi=150)
+            print("Saved misalignment potential plot to misalignment_potential.png")
+            plt.show()
 
 
 if __name__ == "__main__":
