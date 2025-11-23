@@ -450,7 +450,10 @@ org-threat-surface/
 │   └── style.css          # Application styling
 ├── requirements.txt       # Python dependencies
 └── README.md              # This file
-```
+
+<img width="1219" height="632" alt="Screen Shot 2025-11-22 at 5 45 49 PM" src="https://github.com/user-attachments/assets/353f5008-6e08-4eaa-850f-5cd9ba1d4c6f" />
+
+<img width="1064" height="535" alt="Screen Shot 2025-11-22 at 5 50 19 PM" src="https://github.com/user-attachments/assets/202db0d2-ab03-47a0-bb38-c8e1f67e79c6" />```
 
 ## Data Sources
 
