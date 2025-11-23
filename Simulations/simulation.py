@@ -1209,16 +1209,18 @@ def main(argv: Optional[List[str]] = None) -> None:
         default=50,
         help="Maximum number of nodes per org (for data-backed modes).",
     )
+    # Default paths relative to script location
+    script_dir = os.path.dirname(os.path.abspath(__file__))
     parser.add_argument(
         "--master-path",
         type=str,
-        default="master_SP500_TMT.csv",
+        default=os.path.join(script_dir, "master_SP500_TMT.csv"),
         help="Path to master_SP500_TMT.csv.",
     )
     parser.add_argument(
         "--snapshot-path",
         type=str,
-        default="snapshot.csv",
+        default=os.path.join(script_dir, "snapshot.csv"),
         help="Path to snapshot.csv.",
     )
     parser.add_argument(
